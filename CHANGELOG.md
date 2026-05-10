@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-10
+
+### Added
+- `TOMLValue.asCalendar: Time.Calendar?` — typed view over `.datetime(String)` values. Parses the raw text via `Time.RFC3339`. Returns `nil` for non-datetime cases or strings that don't parse.
+- `TOMLValue.asInstant: Time.Instant?` — typed view returning a UTC instant for offset-bearing datetimes. Local-only datetimes (no offset) return `nil` because their wall-clock-to-UTC projection is undefined.
+- `TOMLValue.datetime(from: Time.Calendar) -> TOMLValue` — factory wrapping `Time.RFC3339.serialize(_:)`.
+- 8 new tests covering offset / local / date-only datetime forms, `asInstant` correctness for offset-bearing values, factory output, and Calendar → TOMLValue → Calendar round-trips.
+
+### Dependencies
+- New: `swift-time` 0.1.0 — for the `Time.Calendar` and `Time.Instant` types used by the typed accessors.
+
+### Migration
+- Additive only. The `.datetime(String)` case still preserves raw text for round-trip fidelity; the new typed accessors and factory are available alongside for opt-in adoption.
+
 ## [0.1.1] - 2026-05-10
 
 ### Fixed

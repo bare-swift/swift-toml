@@ -11,10 +11,16 @@ let package = Package(
         .library(name: "TOML", targets: ["TOML"])
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-docc-plugin.git", from: "1.4.0")
+        .package(url: "https://github.com/swiftlang/swift-docc-plugin.git", from: "1.4.0"),
+        .package(url: "https://github.com/bare-swift/swift-time.git", from: "0.1.0")
     ],
     targets: [
-        .target(name: "TOML"),
+        .target(
+            name: "TOML",
+            dependencies: [
+                .product(name: "Time", package: "swift-time")
+            ]
+        ),
         .testTarget(
             name: "TOMLTests",
             dependencies: ["TOML"]
