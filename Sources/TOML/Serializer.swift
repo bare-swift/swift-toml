@@ -20,19 +20,26 @@ enum Serializer {
     }
 
     private static func emitTable(_ entries: [TOMLValue.Entry], prefix: [String], into out: inout String) {
-        // First, emit key/value pairs at this level.
-        var nestedTables: [(path: [String], entries: [TOMLValue.Entry])] = []
-        var nestedArraysOfTables: [(path: [String], items: [[TOMLValue.Entry]])] = []
+        // Two passes:
+        //   1. Walk entries in order. Emit scalars and *leaf* nested tables
+        //      (those with no sub-tables or arrays-of-tables) inline at
+        //      their original position. This preserves insertion order
+        //      across the parse → serialize → parse round-trip.
+        //   2. After the inline pass, emit non-leaf nested tables and
+        //      arrays-of-tables as section headers — these MUST come at
+        //      the end of this level because a section header redirects
+        //      all subsequent key/value lines to that section.
+        var deferred: [(path: [String], kind: DeferredKind)] = []
 
         for entry in entries {
             switch entry.value {
-            case .table(let sub):
-                nestedTables.append((prefix + [entry.key], sub))
+            case .table(let sub) where containsNested(sub):
+                deferred.append((prefix + [entry.key], .table(sub)))
             case .array(let items) where items.allSatisfy({ if case .table = $0 { return true } else { return false } }):
                 let unpacked: [[TOMLValue.Entry]] = items.compactMap {
                     if case .table(let e) = $0 { return e } else { return nil }
                 }
-                nestedArraysOfTables.append((prefix + [entry.key], unpacked))
+                deferred.append((prefix + [entry.key], .arrayOfTables(unpacked)))
             default:
                 out.append(escapeKey(entry.key))
                 out.append(" = ")
@@ -41,21 +48,48 @@ enum Serializer {
             }
         }
 
-        for nt in nestedTables {
-            out.append("\n[")
-            out.append(nt.path.map(escapeKey).joined(separator: "."))
-            out.append("]\n")
-            emitTable(nt.entries, prefix: nt.path, into: &out)
-        }
-
-        for at in nestedArraysOfTables {
-            for item in at.items {
-                out.append("\n[[")
-                out.append(at.path.map(escapeKey).joined(separator: "."))
-                out.append("]]\n")
-                emitTable(item, prefix: at.path, into: &out)
+        for d in deferred {
+            switch d.kind {
+            case .table(let inner):
+                out.append("\n[")
+                out.append(d.path.map(escapeKey).joined(separator: "."))
+                out.append("]\n")
+                emitTable(inner, prefix: d.path, into: &out)
+            case .arrayOfTables(let items):
+                for item in items {
+                    out.append("\n[[")
+                    out.append(d.path.map(escapeKey).joined(separator: "."))
+                    out.append("]]\n")
+                    emitTable(item, prefix: d.path, into: &out)
+                }
             }
         }
+    }
+
+    private enum DeferredKind {
+        case table([TOMLValue.Entry])
+        case arrayOfTables([[TOMLValue.Entry]])
+    }
+
+    /// A "non-leaf" table contains at least one sub-table or array-of-tables,
+    /// directly or transitively. Such tables are emitted as section headers
+    /// at the end of the level. "Leaf" tables (only scalars / inline arrays
+    /// of scalars / nested leaf tables) are emitted inline at their original
+    /// position to preserve ordering.
+    private static func containsNested(_ entries: [TOMLValue.Entry]) -> Bool {
+        for e in entries {
+            switch e.value {
+            case .table(let inner):
+                if containsNested(inner) { return true }
+            case .array(let items):
+                if items.contains(where: { if case .table = $0 { return true } else { return false } }) {
+                    return true
+                }
+            default:
+                continue
+            }
+        }
+        return false
     }
 
     private static func emitValue(_ value: TOMLValue) -> String {
