@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-10
+
+### Fixed
+- Serializer now preserves insertion order across inline-table boundaries. Previously, the serializer emitted *all* nested tables as `[section]` headers at the end of each level, which silently reordered entries on parse → serialize → parse round-trip when an inline table (`key = { ... }`) appeared before a scalar at the same level. Leaf tables (those without sub-tables or arrays-of-tables) are now emitted inline at their original position; only non-leaf tables become section headers.
+
 ## [0.1.0] - 2026-05-10
 
 ### Added
